@@ -1,0 +1,10 @@
+logs/*
+output_md/*
+!logs/.gitkeep
+!output_md/.gitkeep
+
+*.tmp
+*.swp
+*.swo
+.DS_Store
+__pycache__/
