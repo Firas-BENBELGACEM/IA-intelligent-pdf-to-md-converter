@@ -234,61 +234,117 @@ install_dependencies() {
 
     echo "=== Checking system dependencies ==="
 
-    if [ "$INSTALL_DEPS" = "no" ]; then
-        if check_dependencies_only; then
-            echo "Dependencies are present."
-            return 0
-        else
-            echo "Some dependencies are missing and INSTALL_DEPS=no."
-            echo "Install them manually, or rerun with INSTALL_DEPS=auto or yes."
-            exit 1
-        fi
-    fi
-
+    # If dependencies are already installed, continue immediately.
     if check_dependencies_only; then
         echo "Dependencies already installed."
         return 0
     fi
 
-    if [ "$INSTALL_DEPS" = "auto" ] || [ "$INSTALL_DEPS" = "yes" ]; then
-        case "$pm" in
-            apt)
-                sudo apt-get update -y
-                install_if_missing_apt poppler-utils
-                install_if_missing_apt ocrmypdf
-                install_if_missing_apt tesseract-ocr
-                install_if_missing_apt tesseract-ocr-eng
-                install_if_missing_apt tesseract-ocr-fra
-                ;;
-            dnf|yum)
-                if [ "$pm" = "dnf" ]; then
-                    sudo dnf makecache -y
-                else
-                    sudo yum makecache -y
-                fi
-
-                # Common RPM package names
-                install_if_missing_rpm poppler-utils
-                install_if_missing_rpm ocrmypdf
-                install_if_missing_rpm tesseract
-                install_if_missing_rpm tesseract-langpack-eng || true
-                install_if_missing_rpm tesseract-langpack-fra || true
-
-                # Some distros use older names or split language packs differently
-                # We do not fail immediately here; final command checks handle it.
-                ;;
-            *)
-                echo "Unsupported package manager."
-                echo "Please install manually:"
-                echo "  - pdftotext / pdfinfo (poppler-utils)"
-                echo "  - ocrmypdf"
-                echo "  - tesseract"
-                echo "  - language packs for: $OCR_LANGS"
-                exit 1
-                ;;
-        esac
+    # Respect explicit non-install mode.
+    if [ "$INSTALL_DEPS" = "no" ]; then
+        echo
+        echo "Some required dependencies are missing."
+        echo "Automatic installation is disabled because INSTALL_DEPS=no."
+        echo "Please install the required packages manually and rerun the script."
+        exit 1
     fi
 
+    # Unsupported package manager.
+    if [ "$pm" = "unknown" ]; then
+        echo
+        echo "Unsupported package manager."
+        echo "Please install manually:"
+        echo "  - poppler-utils (provides pdftotext and pdfinfo)"
+        echo "  - ocrmypdf"
+        echo "  - tesseract"
+        echo "  - language packs for: $OCR_LANGS"
+        exit 1
+    fi
+
+    # Inform the user before requesting sudo.
+    echo
+    echo "The following commands are missing:"
+    check_dependencies_only || true
+
+    echo
+    echo "Required packages to install:"
+    case "$pm" in
+        apt)
+            echo "  - poppler-utils"
+            echo "  - ocrmypdf"
+            echo "  - tesseract-ocr"
+            echo "  - tesseract-ocr-eng"
+            echo "  - tesseract-ocr-fra"
+            echo
+            echo "Manual installation commands:"
+            echo "  sudo apt-get update"
+            echo "  sudo apt-get install -y poppler-utils ocrmypdf tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra"
+            ;;
+        dnf|yum)
+            echo "  - poppler-utils"
+            echo "  - ocrmypdf"
+            echo "  - tesseract"
+            echo
+            echo "Manual installation commands:"
+            if [ "$pm" = "dnf" ]; then
+                echo "  sudo dnf install -y poppler-utils ocrmypdf tesseract"
+            else
+                echo "  sudo yum install -y poppler-utils ocrmypdf tesseract"
+            fi
+            ;;
+    esac
+
+    echo
+    echo "Choose how you want to proceed:"
+    echo "  1) I will install the packages myself and rerun the script"
+    echo "  2) Let the script install them automatically using sudo"
+    echo "  3) Cancel"
+    echo
+
+    read -rp "Choose an option [1-3]: " choice
+
+    case "$choice" in
+        1)
+            echo
+            echo "Please install the packages using the commands above, then rerun the script."
+            exit 1
+            ;;
+        2)
+            echo
+            echo "Installing missing dependencies..."
+
+            case "$pm" in
+                apt)
+                    sudo apt-get update
+                    install_if_missing_apt poppler-utils
+                    install_if_missing_apt ocrmypdf
+                    install_if_missing_apt tesseract-ocr
+                    install_if_missing_apt tesseract-ocr-eng
+                    install_if_missing_apt tesseract-ocr-fra
+                    ;;
+                dnf|yum)
+                    if [ "$pm" = "dnf" ]; then
+                        sudo dnf makecache -y
+                    else
+                        sudo yum makecache -y
+                    fi
+
+                    install_if_missing_rpm poppler-utils
+                    install_if_missing_rpm ocrmypdf
+                    install_if_missing_rpm tesseract
+                    install_if_missing_rpm tesseract-langpack-eng || true
+                    install_if_missing_rpm tesseract-langpack-fra || true
+                    ;;
+            esac
+            ;;
+        *)
+            echo
+            echo "Installation cancelled."
+            exit 1
+            ;;
+    esac
+
+    # Final verification.
     if check_dependencies_only; then
         echo "=== Dependencies OK ==="
     else
@@ -297,7 +353,6 @@ install_dependencies() {
         exit 1
     fi
 }
-
 
 # =========================
 # MARKDOWN CLEANING
